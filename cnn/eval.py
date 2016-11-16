@@ -21,7 +21,7 @@ def eval(args):
         saver.restore(sess, checkpoint_path)
         test_data = mnist.test.images
         test_labels = mnist.test.labels
-        print("\ntest accuracy %g" % CNN.accuracy.eval(feed_dict={CNN.x: test_data, CNN.y: test_labels}))
+        print("\ntest accuracy %g" % CNN.accuracy.eval(feed_dict={CNN.x: test_data, CNN.y: test_labels, CNN.keep_prob: 1.0}))
 
 if __name__ == '__main__':
     main()
