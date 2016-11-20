@@ -1,6 +1,7 @@
 import os
 import tensorflow as tf
-from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
 
 from utils import ArgumentParser
 from model import Model
@@ -20,14 +21,19 @@ def predict(args):
         saver = tf.train.Saver(tf.all_variables())
         checkpoint_path = os.path.join(args.train_dir, 'model.ckpt')
         saver.restore(sess, checkpoint_path)
-        test_data = mnist.test.images[3]
-        test_data = test_data.reshape((args.num_steps, args.seq_length))
-        print test_data
-        img = Image.fromarray(test_data, "F")
-        img.show();
-        test_labels = mnist.test.labels[3]
-        print test_labels
-        print("\n prediction %g" % RNN.pred.eval(feed_dict={RNN.x: test_data}))
+        test_data = mnist.test.images[30]
+        img = test_data.reshape((args.num_steps, args.seq_length))
+        plt.imshow(img)
+        plt.show()
+        test_data = test_data.reshape((-1, args.num_steps, args.seq_length))
+        test_label = mnist.test.labels[30]
+        print("Correct label: %s" % getLabel(test_label))
+        print("Prediction: %s" % getLabel(RNN.pred.eval(feed_dict={RNN.x: test_data})))
+
+def getLabel(prediction):
+    index = np.argmax(prediction)
+    labels = ["0","1","2","3","4","5","6","7","8","9"]
+    return labels[index]
 
 if __name__ == '__main__':
     main()

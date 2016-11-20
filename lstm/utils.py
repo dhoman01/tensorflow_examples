@@ -7,6 +7,8 @@ class ArgumentParser(object):
                              help='directory containing the sub-dir "formula_images" and the files "im2latex_train.lst" and "im2latex_formulas.lst"')
         self.parser.add_argument('--train_dir', type=str, default='train_dir',
                              help='directory to save TF checkpoints')
+        self.parser.add_argument('--rnn_size', type=int, default=128,
+                         help='size of the RNN')
         self.parser.add_argument('--num_layers', type=int, default=128,
                             help='number of layers in the RNN')
         self.parser.add_argument('--batch_size', type=int, default=128,

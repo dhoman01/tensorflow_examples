@@ -10,12 +10,8 @@ class Model(object):
         y = self.y;
 
         # Define weights
-        self.weights = {
-            'out': tf.Variable(tf.random_normal([args.num_layers, args.num_classes]))
-        }
-        self.biases = {
-            'out': tf.Variable(tf.random_normal([args.num_classes]))
-        }
+        self.W = tf.Variable(tf.random_normal([args.num_layers, args.num_classes]))
+        self.b = tf.Variable(tf.random_normal([args.num_classes]))
 
         # Reshape X
         x = tf.transpose(x, [1,0,2])
@@ -23,9 +19,9 @@ class Model(object):
         x = tf.split(0, args.num_steps, x)
 
         with tf.variable_scope('lstm'):
-            lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(args.num_layers, forget_bias=1.0)
-            outputs, states = tf.nn.rnn(lstm_cell, x, dtype=tf.float32)
-            self.pred = tf.matmul(outputs[-1], self.weights['out'] + self.biases['out'])
+            self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_size, forget_bias=1.0)
+            outputs, states = tf.nn.rnn(self.lstm_cell, x, dtype=tf.float32)
+            self.pred = tf.matmul(outputs[-1], self.W + self.b)
 
         with tf.variable_scope('train'):
             self.cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.pred, y))
