@@ -18,8 +18,8 @@ class Model(object):
           return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
                                 strides=[1, 2, 2, 1], padding='SAME')
 
-        self.x = tf.placeholder(tf.float32, shape=[None, args.input_length])
-        self.y = tf.placeholder(tf.int64, shape=[None, args.seq_length])
+        self.x = tf.placeholder(tf.float32, shape=[None, 28 * 28 * 3])
+        self.y = tf.placeholder(tf.int64, shape=[1024])
 
         with tf.variable_scope('input_cnn'):
             W_conv1 = weight_variable([5, 5, 1, 32])
@@ -45,6 +45,10 @@ class Model(object):
             h_pool3 = max_pool_2x2(h_conv3)
 
         with tf.variable_scope('seq2seq-atten'):
+            encoder_inputs = tf.reshape(h_pool3, [1024])
+            encoder_inputs = tf.to_int64(encoder_inputs)
+            print encoder_inputs
             cell = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_size)
-            cell = tf.nn.run_cell.MultiRNNCell([cell] * args.num_layers)
-            outputs, state = tf.nn.seq2seq.embedding_attention_decoder(all_inputs, initial_state, cell, num_encoder_symbols=1024, num_decoder_symbols=args.vocab_size, args.embedding_size)
+            cell = tf.nn.rnn_cell.MultiRNNCell([cell] * args.num_layers)
+            initial_state = cell.zero_state(1024, tf.float32)
+            outputs, state = tf.nn.seq2seq.embedding_attention_seq2seq([encoder_inputs], [self.y], cell, 1024, 10, 10)
