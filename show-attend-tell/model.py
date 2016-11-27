@@ -21,6 +21,9 @@ class Model(object):
         self.x = tf.placeholder(tf.float32, shape=[None, 28 * 28 * 3])
         self.y = tf.placeholder(tf.int64, shape=[1024])
 
+        x = self.x
+        y = self.y
+
         with tf.variable_scope('input_cnn'):
             W_conv1 = weight_variable([5, 5, 1, 32])
             b_conv1 = bias_variable([32])
@@ -45,10 +48,23 @@ class Model(object):
             h_pool3 = max_pool_2x2(h_conv3)
 
         with tf.variable_scope('seq2seq-atten'):
+            # Define weights
+            self.W = tf.Variable(tf.random_normal([10, 10]))
+            self.b = tf.Variable(tf.random_normal([10]))
+
             encoder_inputs = tf.reshape(h_pool3, [1024])
             encoder_inputs = tf.to_int64(encoder_inputs)
-            print encoder_inputs
+
             cell = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_size)
             cell = tf.nn.rnn_cell.MultiRNNCell([cell] * args.num_layers)
             initial_state = cell.zero_state(1024, tf.float32)
             outputs, state = tf.nn.seq2seq.embedding_attention_seq2seq([encoder_inputs], [self.y], cell, 1024, 10, 10)
+            self.pred = tf.matmul(outputs[-1], self.W + self.b)
+
+        with tf.variable_scope('train'):
+            self.cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.pred, y))
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate).minimize(self.cost)
+
+        with tf.variable_scope('eval'):
+            self.correct_pred = tf.equal(tf.argmax(self.pred, 1),tf.argmax(y, 1))
+            self.accuracy = tf.reduce_mean(tf.cast(self.correct_pred, tf.float32))

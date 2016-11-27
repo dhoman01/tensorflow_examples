@@ -1,4 +1,8 @@
 import argparse
+import numpy as np
+
+from tensorflow.examples.tutorials.mnist import input_data
+mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
 
 class ArgumentParser(object):
     def __init__(self):
@@ -29,3 +33,25 @@ class ArgumentParser(object):
                             help='learning rate')
         self.parser.add_argument('--decay_rate', type=float, default=0.97,
                             help='decay rate for rmsprop')
+
+class DataLoader(object):
+    def __init__(self, args):
+        self.batch_size = args.batch_size
+
+    def next_batch(self):
+
+        def getLabel(prediction):
+            index = np.argmax(prediction)
+            labels = ["0","1","2","3","4","5","6","7","8","9"]
+            return labels[index]
+
+        batch_x = []
+        batch_y = []
+        mnist_x, mnist_y = mnist.train.next_batch(self.batch_size * 3)
+        for i in xrange(2, len(mnist_x), 3):
+            x = np.concatenate([mnist_x[i - 2].reshape(28,28), mnist_x[i - 1].reshape(28,28), mnist_x[i].reshape(28,28)], axis=1)
+            batch_x.append(x)
+            y = np.array([getLabel(mnist_y[i - 2]), getLabel(mnist_y[i - 1]), getLabel(mnist_y[i])])
+            batch_y.append(y)
+
+        return batch_x, batch_y
