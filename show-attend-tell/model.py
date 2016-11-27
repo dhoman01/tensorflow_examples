@@ -19,7 +19,7 @@ class Model(object):
                                 strides=[1, 2, 2, 1], padding='SAME')
 
         self.x = tf.placeholder(tf.float32, shape=[None, 28 * 28 * 3])
-        self.y = tf.placeholder(tf.int64, shape=[1024])
+        self.y = tf.placeholder(tf.int64, shape=[None, 10])
 
         x = self.x
         y = self.y
@@ -49,7 +49,7 @@ class Model(object):
 
         with tf.variable_scope('seq2seq-atten'):
             # Define weights
-            self.W = tf.Variable(tf.random_normal([10, 10]))
+            self.W = tf.Variable(tf.random_normal([args.num_layers, 10]))
             self.b = tf.Variable(tf.random_normal([10]))
 
             encoder_inputs = tf.reshape(h_pool3, [1024])
@@ -58,7 +58,7 @@ class Model(object):
             cell = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_size)
             cell = tf.nn.rnn_cell.MultiRNNCell([cell] * args.num_layers)
             initial_state = cell.zero_state(1024, tf.float32)
-            outputs, state = tf.nn.seq2seq.embedding_attention_seq2seq([encoder_inputs], [self.y], cell, 1024, 10, 10)
+            outputs, state = tf.nn.seq2seq.embedding_attention_seq2seq([encoder_inputs], [y], cell, 1024, 10, 10)
             self.pred = tf.matmul(outputs[-1], self.W + self.b)
 
         with tf.variable_scope('train'):
