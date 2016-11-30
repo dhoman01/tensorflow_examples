@@ -23,20 +23,29 @@ from __future__ import print_function
 import tensorflow as tf
 
 
-def parse_sequence_example(key, value):
+def parse_sequence_example(serialized, image_feature, caption_feature):
   """Parses a tensorflow.SequenceExample into an image and caption.
-
   Args:
-    filename: Filename of image to load
-
+    serialized: A scalar string Tensor; a single serialized SequenceExample.
+    image_feature: Name of SequenceExample context feature containing image
+      data.
+    caption_feature: Name of SequenceExample feature list containing integer
+      captions.
   Returns:
     encoded_image: A scalar string Tensor containing a JPEG encoded image.
     caption: A 1-D uint64 Tensor with dynamically specified length.
   """
-  print("key %s" % key)
+  context, sequence = tf.parse_single_sequence_example(
+      serialized,
+      context_features={
+          image_feature: tf.FixedLenFeature([], dtype=tf.string)
+      },
+      sequence_features={
+          caption_feature: tf.FixedLenSequenceFeature([], dtype=tf.int64),
+      })
 
-  encoded_image = value
-  caption = " "
+  encoded_image = context[image_feature]
+  caption = sequence[caption_feature]
   return encoded_image, caption
 
 

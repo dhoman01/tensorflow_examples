@@ -28,6 +28,7 @@ import threading
 import argparse
 import shutil
 import nltk
+import uuid
 
 from PIL import Image
 
@@ -84,7 +85,9 @@ for i in range(args.num_of_train):
     image = np.concatenate((images[0].reshape(28,28), images[1].reshape(28,28), images[2].reshape(28,28)), axis=1)
     label = onehot2label(captions[0]) + " " + onehot2label(captions[1]) + " " + onehot2label(captions[2])
     image = Image.fromarray(np.uint8(image*255))
-    train_images.append(np.asarray(image))
+    filename = os.path.join(args.data_dir, args.train_dir, "%s.png" % uuid.uuid4())
+    image.save(filename, 'PNG')
+    train_images.append(filename)
     train_labels.append(label)
 
 images = mnist.test.images
@@ -97,7 +100,9 @@ for i in range(args.num_of_test):
     image = np.concatenate((images[i].reshape(28,28), images[i + 1].reshape(28,28), images[i + 2].reshape(28,28)), axis=1)
     label = onehot2label(captions[i]) + " " + onehot2label(captions[i + 1]) + " " + onehot2label(captions[i + 2])
     image = Image.fromarray(np.uint8(image * 255))
-    test_images.append(np.asarray(image))
+    filename = os.path.join(args.data_dir, args.test_dir, "%s.png" % uuid.uuid4())
+    image.save(filename, 'PNG')
+    test_images.append(filename)
     test_labels.append(label)
 
 tf.flags.DEFINE_string("output_dir", "/data_dir/", "Output data directory.")
@@ -111,7 +116,7 @@ tf.flags.DEFINE_string("unknown_word", "<UNK>",
 tf.flags.DEFINE_integer("min_word_count", 1,
                         "The minimum number of occurrences of each word in the "
                         "training set for inclusion in the vocabulary.")
-tf.flags.DEFINE_string("word_counts_output_file", "/data_dir/word_counts.txt",
+tf.flags.DEFINE_string("word_counts_output_file", "data_dir/word_counts.txt",
                        "Output vocabulary file of word counts.")
 
 tf.flags.DEFINE_integer("num_threads", 8,
@@ -120,23 +125,40 @@ tf.flags.DEFINE_integer("num_threads", 8,
 FLAGS = tf.flags.FLAGS
 
 class Vocabulary(object):
-  """Simple vocabulary wrapper."""
+    """Simple vocabulary wrapper."""
 
-def __init__(self, vocab, unk_id):
-    """Initializes the vocabulary.
-    Args:
-    vocab: A dictionary of word to word_id.
-    unk_id: Id of the special 'unknown' word.
-    """
-    self._vocab = vocab
-    self._unk_id = unk_id
+    def __init__(self, vocab, unk_id):
+        """Initializes the vocabulary.
+        Args:
+        vocab: A dictionary of word to word_id.
+        unk_id: Id of the special 'unknown' word.
+        """
+        self._vocab = vocab
+        self._unk_id = unk_id
 
-def word_to_id(self, word):
-    """Returns the integer id of a word string."""
-    if word in self._vocab:
-        return self._vocab[word]
-    else:
-        return self._unk_id
+    def word_to_id(self, word):
+        """Returns the integer id of a word string."""
+        if word in self._vocab:
+            return self._vocab[word]
+        else:
+            return self._unk_id
+class ImageDecoder(object):
+  """Helper class for decoding images in TensorFlow."""
+
+  def __init__(self):
+    # Create a single TensorFlow Session for all image decoding calls.
+    self._sess = tf.Session()
+
+    # TensorFlow ops for JPEG decoding.
+    self._encoded_png = tf.placeholder(dtype=tf.string)
+    self._decode_png = tf.image.decode_png(self._encoded_png, channels=3)
+
+  def decode_png(self, encoded_png):
+    image = self._sess.run(self._decode_png,
+                           feed_dict={self._encoded_png: encoded_png})
+    assert len(image.shape) == 3
+    assert image.shape[2] == 3
+    return image
 
 def _create_vocab(captions):
   """Creates the vocabulary of word to word_id.
@@ -186,37 +208,61 @@ def _process_caption(caption):
 def _int64_feature(value):
   return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
+def _int64_feature_list(values):
+  """Wrapper for inserting an int64 FeatureList into a SequenceExample proto."""
+  return tf.train.FeatureList(feature=[_int64_feature(v) for v in values])
 
 def _bytes_feature(value):
-  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+def _bytes_feature_list(values):
+    """Wrapper for inserting a bytes FeatureList into a SequenceExample proto."""
+    return tf.train.FeatureList(feature=[_bytes_feature(v) for v in values])
+
+def _to_sequence_example(filename, caption, decoder, vocab):
+  """Builds a SequenceExample proto for an image-caption pair.
+  Args:
+    image: An ImageMetadata object.
+    decoder: An ImageDecoder object.
+    vocab: A Vocabulary object.
+  Returns:
+    A SequenceExample proto.
+  """
+  with tf.gfile.FastGFile(filename, "r") as f:
+    encoded_image = f.read()
+
+  try:
+    decoder.decode_png(encoded_image)
+  except (tf.errors.InvalidArgumentError, AssertionError):
+    print("Skipping file with invalid PNG data: %s" % filename)
+    return
+
+  context = tf.train.Features(feature={
+      "image/data": _bytes_feature(encoded_image),
+  })
+
+  caption_ids = [vocab.word_to_id(word) for word in caption]
+  feature_lists = tf.train.FeatureLists(feature_list={
+      "image/caption": _bytes_feature_list(caption),
+      "image/caption_ids": _int64_feature_list(caption_ids)
+  })
+  sequence_example = tf.train.SequenceExample(
+      context=context, feature_lists=feature_lists)
+
+  return sequence_example
 
 # images and labels array as input
-def convert_to(images, labels, name, dir):
-  num_examples = labels.shape[0]
-  if images.shape[0] != num_examples:
-    raise ValueError("Images size %d does not match label size %d." %
-                     (images.shape[0], num_examples))
-  rows = images.shape[1]
-  cols = images.shape[2]
-
+def convert_to(images, labels, name, dir, vocab):
   filename = os.path.join(dir, name + '.tfrecords')
   print('Writing', filename)
   writer = tf.python_io.TFRecordWriter(filename)
-  for index in range(num_examples):
-    image_raw = images[index].tostring()
-    example = tf.train.Example(features=tf.train.Features(feature={
-        'height': _int64_feature(rows),
-        'width': _int64_feature(cols),
-        'label': _int64_feature(int(labels[index])),
-        'image_raw': _bytes_feature(image_raw)}))
+  decoder = ImageDecoder()
+  for index in range(len(labels)):
+    caption = _process_caption(labels[index])
+    example = _to_sequence_example(images[index], caption, decoder, vocab)
     writer.write(example.SerializeToString())
 
-train_images = np.array(train_images)
-train_labels = np.array(train_labels)
-test_images = np.array(test_images)
-test_labels = np.array(test_labels)
+vocab = _create_vocab(train_labels + test_labels)
 
-vocab = _create_vocab(np.concatenate(train_labels, test_labels))
-
-convert_to(train_images, train_labels, "training", os.path.join(args.data_dir, args.train_dir))
-convert_to(test_images, test_labels, "testing", os.path.join(args.data_dir, args.test_dir))
+convert_to(train_images, train_labels, "training", os.path.join(args.data_dir, args.train_dir), vocab)
+convert_to(test_images, test_labels, "testing", os.path.join(args.data_dir, args.test_dir), vocab)

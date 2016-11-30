@@ -51,3 +51,7 @@ class ArgumentParser(object):
             help="The min number of shards to keep in the input queue")
         self.parser.add_argument('--num_input_reader_threads', type=int, default=1,
             help="The number of threads for prefetching input data")
+        self.parser.add_argument('--image_feature_name', type=str, default='image/data',
+            help="The name of the SequenceExample context feature containing the image data")
+        self.parser.add_argument('--caption_feature_name', type=str, default='image/caption_ids',
+            help='The name of the SequenceExample feature list containing integer captions')

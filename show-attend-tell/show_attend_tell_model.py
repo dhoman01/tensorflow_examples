@@ -104,10 +104,11 @@ class Model(object):
             assert self.config.num_preprocess_threads % 2 == 0
             images_and_captions = []
             for thread_id in range(self.config.num_preprocess_threads):
-                key, value = input_queue.dequeue()
+                serialized_sequence_example = input_queue.dequeue()
                 encoded_image, caption = input_ops.parse_sequence_example(
-                    key,
-                    value)
+                    serialized_sequence_example,
+                    image_feature=self.config.image_feature_name,
+                    caption_feature=self.config.caption_feature_name)
                 image = self.process_image(encoded_image, thread_id=thread_id)
                 images_and_captions.append([image, caption])
 
