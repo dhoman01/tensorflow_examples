@@ -1,3 +1,4 @@
 data_dir/
 MNIST_data/
-.pyc
+**/*.pyc
+show-and-tell/

@@ -1,57 +1,53 @@
 import argparse
-import numpy as np
-
-from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
 
 class ArgumentParser(object):
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument('--data_dir', type=str, default='data_dir',
-                             help='directory containing the sub-dir "formula_images" and the files "im2latex_train.lst" and "im2latex_formulas.lst"')
+            help='directory containing the training data')
         self.parser.add_argument('--train_dir', type=str, default='train_dir',
-                             help='directory to save TF checkpoints')
-        self.parser.add_argument('--rnn_size', type=int, default=128,
-                         help='size of the RNN')
-        self.parser.add_argument('--num_layers', type=int, default=128,
-                            help='number of layers in the RNN')
-        self.parser.add_argument('--batch_size', type=int, default=128,
-                            help='minibatch size')
-        self.parser.add_argument('--seq_length', type=int, default=28,
-                            help='RNN sequence length')
-        self.parser.add_argument('--num_classes', type=int, default=10,
-                            help='number of classes')
-        self.parser.add_argument('--num_steps', type=int, default=28,
-                            help='number of timesteps')
+            help='directory to save TF checkpoints')
+        self.parser.add_argument('--eval_dir', type=str, default='eval_dir',
+            help='directory to save Eval summaries')
+        self.parser.add_argument('--batch_size', type=int, default=126,
+            help='the size of each training batch')
+        self.parser.add_argument('--initializer_scale', type=float, default=0.08,
+            help='Bounds for random variables (lower is negative of given value)')
+        self.parser.add_argument('--embedding_size', type=int, default=512,
+            help='LSTM input dimensionality')
+        self.parser.add_argument('--num_lstm_units', type=int, default=512,
+            help='LSTM output dimensionality')
+        self.parser.add_argument('--lstm_droput_keep_prob', type=float, default=0.7,
+            help='The dropout keep probability applied to LSTM variables')
+        self.parser.add_argument('--vocab_size', type=int, default=20,
+            help='Number of unique "words" in the vocab (+1 for <UNK>). Must be greater than or equal to actual vocab size.')
+        self.parser.add_argument('--num_preprocess_threads', type=int, default=4,
+            help='Number of threads used for preprocessing. Should be multiple of 2')
+        self.parser.add_argument('--image_height', type=int, default=28,
+            help='The height dimension of input images')
+        self.parser.add_argument('--image_width', type=int, default=84,
+            help='The width dimension of input images')
         self.parser.add_argument('--num_epochs', type=int, default=20000,
-                            help='number of epochs')
-        self.parser.add_argument('--save_every', type=int, default=100,
-                            help='save frequency')
-        self.parser.add_argument('--grad_clip', type=float, default=5.,
-                            help='clip gradients at this value')
-        self.parser.add_argument('--learning_rate', type=float, default=0.002,
-                            help='learning rate')
-        self.parser.add_argument('--decay_rate', type=float, default=0.97,
-                            help='decay rate for rmsprop')
-
-class DataLoader(object):
-    def __init__(self, args):
-        self.batch_size = args.batch_size
-
-    def next_batch(self):
-
-        def getLabel(prediction):
-            index = np.argmax(prediction)
-            labels = ["0","1","2","3","4","5","6","7","8","9"]
-            return labels[index]
-
-        batch_x = []
-        batch_y = []
-        mnist_x, mnist_y = mnist.train.next_batch(self.batch_size * 3)
-        for i in xrange(2, len(mnist_x), 3):
-            x = np.concatenate([mnist_x[i - 2].reshape(28,28), mnist_x[i - 1].reshape(28,28), mnist_x[i].reshape(28,28)], axis=1)
-            batch_x.append(x)
-            y = np.array([getLabel(mnist_y[i - 2]), getLabel(mnist_y[i - 1]), getLabel(mnist_y[i])])
-            batch_y.append(y)
-
-        return batch_x, batch_y
+            help='The number of training epochs')
+        self.parser.add_argument('--learning_rate', type=float, default=2.0,
+            help='The learning rate of the model')
+        self.parser.add_argument('--decay_factor', type=float, default=0.5,
+            help='The decay factor of the learning rate')
+        self.parser.add_argument('--num_epochs_per_decay', type=int, default=8,
+            help='The number of epochs trained per decay cycle')
+        self.parser.add_argument('--clip_gradients', type=float, default=5.0,
+            help='The clip gradients')
+        self.parser.add_argument('--max_ckpt_to_keep', type=int, default=5,
+            help='The maximum number of checkpoints to save')
+        self.parser.add_argument('--optimizer', type=str, default="Adam",
+            help='The optimizer used for training the model')
+        self.parser.add_argument('--log_every_n_steps', type=int, default=100,
+            help='Frequency to print out log messages')
+        self.parser.add_argument('--input_file_pattern', type=str, default="*.jpg",
+            help='The file pattern of the input images')
+        self.parser.add_argument('--values_per_input_shard', type=int, default=2300,
+            help='The ~number of values per input shard')
+        self.parser.add_argument('--input_queue_capacity_factor', type=int, default=2,
+            help="The min number of shards to keep in the input queue")
+        self.parser.add_argument('--num_input_reader_threads', type=int, default=1,
+            help="The number of threads for prefetching input data")
