@@ -43,7 +43,7 @@ class ArgumentParser(object):
             help='The optimizer used for training the model')
         self.parser.add_argument('--log_every_n_steps', type=int, default=100,
             help='Frequency to print out log messages')
-        self.parser.add_argument('--input_file_pattern', type=str, default="*.jpg",
+        self.parser.add_argument('--input_file_pattern', type=str, default="data_dir/train/*",
             help='The file pattern of the input images')
         self.parser.add_argument('--values_per_input_shard', type=int, default=2300,
             help='The ~number of values per input shard')

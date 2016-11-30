@@ -33,7 +33,7 @@ class Model(object):
         self.mode = mode
 
         # Reader for the input data.
-        self.reader = tf.TFRecordReader()
+        self.reader = tf.WholeFileReader()
 
         # An int32 Tensor with shape [batch_size, padded_length].
         self.input_seqs = None
@@ -104,11 +104,10 @@ class Model(object):
             assert self.config.num_preprocess_threads % 2 == 0
             images_and_captions = []
             for thread_id in range(self.config.num_preprocess_threads):
-                serialized_sequence_example = input_queue.dequeue()
+                key, value = input_queue.dequeue()
                 encoded_image, caption = input_ops.parse_sequence_example(
-                    serialized_sequence_example,
-                    image_feature=self.config.image_feature_name,
-                    caption_feature=self.config.caption_feature_name)
+                    key,
+                    value)
                 image = self.process_image(encoded_image, thread_id=thread_id)
                 images_and_captions.append([image, caption])
 

@@ -67,8 +67,6 @@ def process_image(encoded_image,
     # Crop to final dimensions.
     image = tf.image.resize_image_with_crop_or_pad(image, height, width)
 
-    image_summary("resized_image", image)
-
     image_summary("final_image", image)
 
     # Rescale to [-1,1] instead of [0, 1]

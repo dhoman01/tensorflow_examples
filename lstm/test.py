@@ -21,14 +21,14 @@ def predict(args):
         saver = tf.train.Saver(tf.all_variables())
         checkpoint_path = os.path.join(args.train_dir, 'model.ckpt')
         saver.restore(sess, checkpoint_path)
-        test_data = mnist.test.images[30]
+        test_data = mnist.test.images[55]
         img = test_data.reshape((args.num_steps, args.seq_length))
         plt.imshow(img)
-        plt.show()
         test_data = test_data.reshape((-1, args.num_steps, args.seq_length))
-        test_label = mnist.test.labels[30]
-        print("Correct label: %s" % getLabel(test_label))
+        test_label = mnist.test.labels[55]
+        print("\n\nCorrect label: %s" % getLabel(test_label))
         print("Prediction: %s" % getLabel(RNN.pred.eval(feed_dict={RNN.x: test_data})))
+        plt.show()
 
 def getLabel(prediction):
     index = np.argmax(prediction)
