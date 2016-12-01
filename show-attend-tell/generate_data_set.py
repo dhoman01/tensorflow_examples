@@ -52,6 +52,16 @@ parser.add_argument('--num_of_test', type=int, default=9996,
     help='The number of testing images to generate. Needs to be <9996 and x % 3 == 0')
 args = parser.parse_args()
 
+try:
+    shutil.rmtree(os.path.join(args.data_dir, args.train_dir))
+except:
+    print('Train dir is already empty')
+
+try:
+    shutil.rmtree(os.path.join(args.data_dir, args.test_dir))
+except:
+    print('Test dir is already empty')
+
 if not os.path.isdir(args.data_dir):
     os.mkdir(args.data_dir)
     os.mkdir(os.path.join(args.data_dir, args.train_dir))
@@ -61,15 +71,6 @@ if not os.path.isdir(os.path.join(args.data_dir, args.train_dir)):
 if not os.path.isdir(os.path.join(args.data_dir, args.test_dir)):
     os.mkdir(os.path.join(args.data_dir, args.test_dir))
 
-try:
-    shutil.rmtree(os.path.join(args.data_dir, args.train_dir, '*'))
-except:
-    print('Train dir is already empty')
-
-try:
-    shutil.rmtree(os.path.join(args.data_dir, args.test_dir, '*'))
-except:
-    print('Test dir is already empty')
 
 labels = ["0","1","2","3","4","5","6","7","8","9"]
 def onehot2label(caption):
@@ -170,8 +171,12 @@ def _create_vocab(captions):
     A Vocabulary object.
   """
   print("Creating vocabulary.")
+  captions.append("<GO>")
+  captions.append("</EOS>")
   counter = Counter()
+  print("captions %s" % captions)
   for c in captions:
+    print("c %s" % c)
     counter.update(c)
   print("Total words:", len(counter))
 
@@ -189,6 +194,8 @@ def _create_vocab(captions):
   reverse_vocab = [x[0] for x in word_counts]
   unk_id = len(reverse_vocab)
   vocab_dict = dict([(x, y) for (y, x) in enumerate(reverse_vocab)])
+
+  print("Vocab dict: %s" % vocab_dict)
   vocab = Vocabulary(vocab_dict, unk_id)
 
   return vocab
@@ -238,7 +245,7 @@ def _to_sequence_example(filename, caption, decoder, vocab):
     return
 
   context = tf.train.Features(feature={
-      "image/data": _bytes_feature(encoded_image),
+      "image/data": _bytes_feature(encoded_image)
   })
 
   caption_ids = [vocab.word_to_id(word) for word in caption]
@@ -260,9 +267,15 @@ def convert_to(images, labels, name, dir, vocab):
   for index in range(len(labels)):
     caption = _process_caption(labels[index])
     example = _to_sequence_example(images[index], caption, decoder, vocab)
-    writer.write(example.SerializeToString())
+    if example is not None:
+        writer.write(example.SerializeToString())
 
-vocab = _create_vocab(train_labels + test_labels)
+  writer.close()
+
+captions = train_labels + test_labels
+print("captions %s" % captions)
+captions = [_process_caption(c) for c in captions]
+vocab = _create_vocab(captions)
 
 convert_to(train_images, train_labels, "training", os.path.join(args.data_dir, args.train_dir), vocab)
 convert_to(test_images, test_labels, "testing", os.path.join(args.data_dir, args.test_dir), vocab)

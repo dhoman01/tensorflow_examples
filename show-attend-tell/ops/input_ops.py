@@ -25,12 +25,14 @@ import tensorflow as tf
 
 def parse_sequence_example(serialized, image_feature, caption_feature):
   """Parses a tensorflow.SequenceExample into an image and caption.
+
   Args:
     serialized: A scalar string Tensor; a single serialized SequenceExample.
     image_feature: Name of SequenceExample context feature containing image
       data.
     caption_feature: Name of SequenceExample feature list containing integer
       captions.
+
   Returns:
     encoded_image: A scalar string Tensor containing a JPEG encoded image.
     caption: A 1-D uint64 Tensor with dynamically specified length.
@@ -111,7 +113,7 @@ def prefetch_input_data(reader,
   enqueue_ops = []
   for _ in range(num_reader_threads):
     _, value = reader.read(filename_queue)
-    enqueue_ops.append(values_queue.enqueue([_, value]))
+    enqueue_ops.append(values_queue.enqueue([value]))
   tf.train.queue_runner.add_queue_runner(tf.train.queue_runner.QueueRunner(
       values_queue, enqueue_ops))
   tf.scalar_summary(

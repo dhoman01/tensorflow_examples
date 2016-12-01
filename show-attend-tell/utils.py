@@ -9,14 +9,16 @@ class ArgumentParser(object):
             help='directory to save TF checkpoints')
         self.parser.add_argument('--eval_dir', type=str, default='eval_dir',
             help='directory to save Eval summaries')
-        self.parser.add_argument('--batch_size', type=int, default=126,
+        self.parser.add_argument('--batch_size', type=int, default=50,
             help='the size of each training batch')
         self.parser.add_argument('--initializer_scale', type=float, default=0.08,
             help='Bounds for random variables (lower is negative of given value)')
         self.parser.add_argument('--embedding_size', type=int, default=512,
             help='LSTM input dimensionality')
-        self.parser.add_argument('--num_lstm_units', type=int, default=512,
+        self.parser.add_argument('--rnn_size', type=int, default=512,
             help='LSTM output dimensionality')
+        self.parser.add_argument('--num_layers', type=int, default=3,
+            help='The number of LSTM layers')
         self.parser.add_argument('--lstm_droput_keep_prob', type=float, default=0.7,
             help='The dropout keep probability applied to LSTM variables')
         self.parser.add_argument('--vocab_size', type=int, default=20,
@@ -55,3 +57,7 @@ class ArgumentParser(object):
             help="The name of the SequenceExample context feature containing the image data")
         self.parser.add_argument('--caption_feature_name', type=str, default='image/caption_ids',
             help='The name of the SequenceExample feature list containing integer captions')
+        self.parser.add_argument('--image_channels', type=int, default=3,
+            help='The number of channels in the input images')
+        self.parser.add_argument('--image_format', type=str, default="png",
+            help='The format of the input images')

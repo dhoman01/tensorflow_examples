@@ -33,7 +33,7 @@ class Model(object):
         self.mode = mode
 
         # Reader for the input data.
-        self.reader = tf.WholeFileReader()
+        self.reader = tf.TFRecordReader()
 
         # An int32 Tensor with shape [batch_size, padded_length].
         self.input_seqs = None
@@ -66,7 +66,7 @@ class Model(object):
     def is_training(self):
         return self.mode == "training"
 
-    def process_image(self, encoded_image, tread_id=0):
+    def process_image(self, encoded_image, thread_id=0):
         return image_processing.process_image(encoded_image,
                     is_training=self.is_training(),
                     height=self.config.image_height,
@@ -130,6 +130,8 @@ class Model(object):
         cnn.x = self.images
         cnn_outputs = cnn.outputs
 
+        tf.logging.info("cnn_outputs %s" % cnn_outputs)
+
         with tf.variable_scope("image_embedding") as scope:
             image_embeddings = tf.contrib.layers.fully_connected(
                 inputs=cnn_outputs,
@@ -156,9 +158,15 @@ class Model(object):
         if self.config.num_layers > 1:
             cell = tf.nn.rnn_cell.MultiRNNCell([cell] * self.config.num_layers)
 
+        if self.is_training():
+            cell = tf.nn.rnn_cell.DropoutWrapper(
+                cell,
+                input_keep_prob=self.config.lstm_droput_keep_prob,
+                output_keep_prob=self.config.lstm_droput_keep_prob)
+
         def _decoder_fn(decoder_inputs, initial_state, cell, num_symbols, embedding_size, scope, initial_state_attention=False):
-            top_states = [array_ops.reshape(e, [-1, 1, cell.output_size]) for e in self.image_embeddings]
-            attention_states = array_ops.concat(1, top_states)
+            top_states = [tf.reshape(e, [-1, 1, cell.output_size]) for e in tf.unpack(self.image_embeddings)]
+            attention_states = tf.concat(1, top_states)
             return tf.nn.seq2seq.embedding_attention_decoder(decoder_inputs=decoder_inputs,
                                                              initial_state=initial_state,
                                                              attention_states=attention_states,
@@ -168,7 +176,7 @@ class Model(object):
                                                              scope=scope,
                                                              initial_state_attention=initial_state_attention)
 
-        with tf.variable_scope("attend") as attend_scope:
+        with tf.variable_scope("attend", initializer=self.initializer) as attend_scope:
             zero_state = cell.zero_state(batch_size=self.image_embeddings.get_shape()[0], dtype=tf.float32)
             _, initial_state = cell(self.image_embeddings, zero_state)
 
@@ -188,16 +196,22 @@ class Model(object):
                 tf.concat(1, state_tuple, name="state")
             else:
                 sequence_length = tf.reduce_sum(self.input_mask, 1)
-                outputs, state = _decoder_fn(
-                    decoder_inputs=self.seq_embeddings,
-                    initial_state=initial_state,
-                    cell=cell,
-                    num_symbols=sequence_length,
-                    embedding_size=self.config.embedding_size,
-                    scope=attend_scope)
+                outputs, _ = tf.nn.dynamic_rnn(cell=cell,
+                                               inputs=self.seq_embeddings,
+                                               sequence_length=sequence_length,
+                                               initial_state=initial_state,
+                                               dtype=tf.float32,
+                                               scope=attend_scope)
+                # outputs, state = _decoder_fn(
+                #     decoder_inputs=self.input_seqs,
+                #     initial_state=initial_state,
+                #     cell=cell,
+                #     num_symbols=self.config.vocab_size,
+                #     embedding_size=self.config.embedding_size,
+                #     scope=attend_scope)
 
         # Stace batches
-        outputs = tf.reshape(outputs, [-1, cel.output_size])
+        outputs = tf.reshape(outputs, [-1, cell.output_size])
 
         with tf.variable_scope("logits") as logits_scope:
             logits = tf.contrib. layers.fully_connected(
@@ -231,10 +245,10 @@ class Model(object):
 
     def setup_global_step(self):
         global_step = tf.Variable(
-            intial_value=0,
+            initial_value=0,
             name="global_step",
             trainable=False,
-            collection=[tf.GraphKeys.GLOBAL_STEP, tf.GraphKeys.VARIABLES])
+            collections=[tf.GraphKeys.GLOBAL_STEP, tf.GraphKeys.VARIABLES])
 
         self.global_step = global_step
 
@@ -245,3 +259,5 @@ class Model(object):
         self.build_seq_embeddings()
         self.build_model()
         self.setup_global_step()
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())

@@ -9,7 +9,7 @@ class ArgumentParser(object):
                              help='directory to save TF checkpoints')
         self.parser.add_argument('--num_layers', type=int, default=128,
                             help='number of layers in the RNN')
-        self.parser.add_argument('--batch_size', type=int, default=128,
+        self.parser.add_argument('--batch_size', type=int, default=500,
                             help='minibatch size')
         self.parser.add_argument('--seq_length', type=int, default=28,
                             help='RNN sequence length')
