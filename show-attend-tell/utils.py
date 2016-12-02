@@ -1,4 +1,5 @@
 import argparse
+import os
 
 class ArgumentParser(object):
     def __init__(self):
@@ -27,9 +28,9 @@ class ArgumentParser(object):
             help='Number of unique "words" in the vocab (+1 for <UNK>). Must be greater than or equal to actual vocab size.')
         self.parser.add_argument('--num_preprocess_threads', type=int, default=4,
             help='Number of threads used for preprocessing. Should be multiple of 2')
-        self.parser.add_argument('--image_height', type=int, default=28,
+        self.parser.add_argument('--image_height', type=int, default=299,
             help='The height dimension of input images')
-        self.parser.add_argument('--image_width', type=int, default=84,
+        self.parser.add_argument('--image_width', type=int, default=299,
             help='The width dimension of input images')
         self.parser.add_argument('--num_epochs', type=int, default=20000,
             help='The number of training epochs')

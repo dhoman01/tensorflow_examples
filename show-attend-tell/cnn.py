@@ -18,12 +18,20 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-import numpy as np
+
+from tensorflow.contrib.slim.python.slim.nets.inception_v3 import inception_v3_base
+
+slim = tf.contrib.slim
 
 class InceptionV3(object):
-    def __init__(self, config, images):
-        if config.train_inception:
-            weights_regularizer = tf.contrib.layers.l2_regularizer(config.weight_decay)
+    def __init__(self, config, images, scope="InceptionV3"):
+        tf.logging.info("InceptionV3 config: %s" % config)
+
+        images = tf.reshape(images, [-1, config['image_height'], config['image_width'], config['image_channels']])
+
+        tf.logging.info("Image reshaped to %s" % images.get_shape())
+        if config['train_inception']:
+            weights_regularizer = tf.contrib.layers.l2_regularizer(config['weight_decay'])
         else:
             weights_regularizer = None
 
@@ -31,33 +39,41 @@ class InceptionV3(object):
             with slim.arg_scope(
                     [slim.conv2d, slim.fully_connected],
                     weights_regularizer=weights_regularizer,
-                    trainable=config.train_inception):
+                    trainable=config['train_inception']):
                 with slim.arg_scope(
-                    [slim.conv2d],
-                    weights_initializer=tf.truncated_normal_initializer(stddev=config.stddev),
-                    activation_fn=tf.nn.relu,
-                    normalizer_fn=slim.batch_norm,
-                    normalizer_params=None):
+                        [slim.conv2d],
+                        weights_initializer=tf.truncated_normal_initializer(stddev=config['stddev']),
+                        activation_fn=tf.nn.relu,
+                        normalizer_fn=slim.batch_norm,
+                        normalizer_params=None):
                     net, end_points = inception_v3_base(images, scope=scope)
                     with tf.variable_scope("logits"):
                         shape = net.get_shape()
                         net = slim.avg_pool2d(net, shape[1:3], padding="VALID", scope="pool")
                         net = slim.dropout(
                             net,
-                            keep_prob=config.dropout_prob,
-                            is_training=config.train_inception,
+                            keep_prob=config['dropout_prob'],
+                            is_training=config['train_inception'],
                             scope="dropout")
                         net = slim.flatten(net, scope="flatten")
 
         # Add summaries.
-        if config.add_summaries:
+        if config['add_summaries']:
             for v in end_points.values():
                 tf.contrib.layers.summaries.summarize_activation(v)
 
         self.net = net
 
-def get_default_inception_configs():
-    return {"train_inception": true, "dropout_prob": 0.8, "weight_decay": 0.00004, "stddev": 0.1, "add_summaries": True}
+def get_default_inception_configs(args):
+    return {
+        "train_inception": True,
+        "dropout_prob": 0.8,
+        "weight_decay": 0.00004,
+        "stddev": 0.1,
+        "add_summaries": True,
+        "image_height": args.image_height,
+        "image_width": args.image_width,
+        "image_channels": args.image_channels}
 
 def setup_inception_initializer(mode, variables, ckpt_file):
     """Sets up the function to restore inception variables from checkpoint."""

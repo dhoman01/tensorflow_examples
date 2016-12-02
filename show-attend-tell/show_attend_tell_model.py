@@ -24,7 +24,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-from cnn
+import cnn
 from ops import input_ops, image_processing
 
 class Model(object):
@@ -57,6 +57,12 @@ class Model(object):
 
         # A float32 Tensor with shape [batch_size * padded_length].
         self.target_cross_entropy_loss_weights = None
+
+        # Collection of variables from the inception submodel.
+        self.inception_variables = []
+
+        # Function to restore the inception submodel from checkpoint.
+        self.init_fn = None
 
         # Used to initialize variables in various networks
         self.initializer = tf.random_uniform_initializer(
@@ -125,16 +131,14 @@ class Model(object):
         self.target_seqs = target_seqs
         self.input_mask = input_mask
 
-
-    def init_cnn(self):
-        self.init_fn = cnn.init_cnn(self.mode, self.inception_variables, self.config.inception_checkpoint_file)
-        self.inception_config = cnn.get_default_inception_configs()
-
     def build_image_embeddings(self):
-        cnn_output = cnn.InceptionV3(self.inception_config, self.images)
+        self.inception_config = cnn.get_default_inception_configs(self.config)
+        cnn_output = cnn.InceptionV3(self.inception_config, self.images).net
 
         self.inception_variables = tf.get_collection(
             tf.GraphKeys.VARIABLES, scope="InceptionV3")
+
+        tf.logging.info("inception_variables %s" % self.inception_variables)
 
         with tf.variable_scope("image_embedding") as scope:
             image_embeddings = tf.contrib.layers.fully_connected(
@@ -168,24 +172,22 @@ class Model(object):
                 input_keep_prob=self.config.lstm_droput_keep_prob,
                 output_keep_prob=self.config.lstm_droput_keep_prob)
 
-        # def _decoder_fn(decoder_inputs, initial_state, cell, num_symbols, embedding_size, scope, initial_state_attention=False):
-        #     top_states = [tf.reshape(e, [-1, 1, cell.output_size]) for e in tf.unpack(self.image_embeddings)]
-        #     attention_states = tf.concat(1, top_states)
-        #     return tf.nn.seq2seq.embedding_attention_decoder(decoder_inputs=decoder_inputs,
-        #                                                      initial_state=initial_state,
-        #                                                      attention_states=attention_states,
-        #                                                      cell=cell,
-        #                                                      num_symbols=num_symbols,
-        #                                                      embedding_size=embedding_size,
-        #                                                      scope=scope,
-        #                                                      initial_state_attention=initial_state_attention)
+        def _decoder_fn(decoder_inputs, initial_state, cell, output_size, scope, initial_state_attention=True):
+            top_states = [tf.reshape(e, [-1, 1, cell.output_size]) for e in tf.unpack(self.image_embeddings)]
+            attention_states = tf.concat(1, top_states)
+            return tf.nn.seq2seq.attention_decoder(decoder_inputs=decoder_inputs,
+                                                             initial_state=initial_state,
+                                                             attention_states=attention_states,
+                                                             cell=cell,
+                                                             output_size=output_size,
+                                                             initial_state_attention=initial_state_attention)
 
         with tf.variable_scope("attend", initializer=self.initializer) as attend_scope:
             zero_state = cell.zero_state(batch_size=self.image_embeddings.get_shape()[0], dtype=tf.float32)
             _, initial_state = cell(self.image_embeddings, zero_state)
 
             # allow attend variables to be reused.
-            attend_scope.reuse_variables()
+            # attend_scope.reuse_variables()
 
             if self.mode == "inference":
                 tf.concat(1, initial_state, name="initial_state")
@@ -200,19 +202,18 @@ class Model(object):
                 tf.concat(1, state_tuple, name="state")
             else:
                 sequence_length = tf.reduce_sum(self.input_mask, 1)
-                outputs, _ = tf.nn.dynamic_rnn(cell=cell,
-                                               inputs=self.seq_embeddings,
-                                               sequence_length=sequence_length,
-                                               initial_state=initial_state,
-                                               dtype=tf.float32,
-                                               scope=attend_scope)
-                # outputs, state = _decoder_fn(
-                #     decoder_inputs=self.input_seqs,
-                #     initial_state=initial_state,
-                #     cell=cell,
-                #     num_symbols=self.config.vocab_size,
-                #     embedding_size=self.config.embedding_size,
-                #     scope=attend_scope)
+                # outputs, _ = tf.nn.dynamic_rnn(cell=cell,
+                #                                inputs=self.seq_embeddings,
+                #                                sequence_length=sequence_length,
+                #                                initial_state=initial_state,
+                #                                dtype=tf.float32,
+                #                                scope=attend_scope)
+                outputs, state = _decoder_fn(
+                    decoder_inputs=tf.unpack(self.seq_embeddings),
+                    initial_state=initial_state,
+                    cell=cell,
+                    output_size=cell.output_size,
+                    scope=attend_scope)
 
         # Stace batches
         outputs = tf.reshape(outputs, [-1, cell.output_size])
@@ -247,6 +248,19 @@ class Model(object):
             self.target_cross_entropy_losses = losses
             self.target_cross_entropy_loss_weights = weights
 
+    def init_cnn(self):
+        """Sets up the function to restore inception variables from checkpoint."""
+        if self.mode != "inference":
+            # Restore inception variables only.
+            saver = tf.train.Saver(self.inception_variables)
+
+            def restore_fn(sess):
+                tf.logging.info("Restoring Inception variables from checkpoint file %s",
+                    self.config.inception_checkpoint_file)
+                saver.restore(sess, self.config.inception_checkpoint_file)
+
+            self.init_fn = restore_fn
+
     def setup_global_step(self):
         global_step = tf.Variable(
             initial_value=0,
@@ -259,8 +273,8 @@ class Model(object):
     def build(self):
         """Creates all ops for training and evaluation."""
         self.build_inputs()
-        self.init_cnn()
         self.build_image_embeddings()
         self.build_seq_embeddings()
         self.build_model()
+        self.init_cnn()
         self.setup_global_step()
