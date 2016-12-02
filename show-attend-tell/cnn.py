@@ -20,70 +20,54 @@ from __future__ import print_function
 import tensorflow as tf
 import numpy as np
 
-class CNN(object):
-    def __init__(self, args):
-        # Helper functions
-        def weight_variable(shape, name):
-          initial = tf.truncated_normal(shape, stddev=0.1)
-          return tf.Variable(initial, name=name)
+class InceptionV3(object):
+    def __init__(self, config, images):
+        if config.train_inception:
+            weights_regularizer = tf.contrib.layers.l2_regularizer(config.weight_decay)
+        else:
+            weights_regularizer = None
 
-        def bias_variable(shape, name):
-          initial = tf.constant(0.1, shape=shape)
-          return tf.Variable(initial, name=name)
+        with tf.variable_scope(scope, "InceptionV3", [images]) as scope:
+            with slim.arg_scope(
+                    [slim.conv2d, slim.fully_connected],
+                    weights_regularizer=weights_regularizer,
+                    trainable=config.train_inception):
+                with slim.arg_scope(
+                    [slim.conv2d],
+                    weights_initializer=tf.truncated_normal_initializer(stddev=config.stddev),
+                    activation_fn=tf.nn.relu,
+                    normalizer_fn=slim.batch_norm,
+                    normalizer_params=None):
+                    net, end_points = inception_v3_base(images, scope=scope)
+                    with tf.variable_scope("logits"):
+                        shape = net.get_shape()
+                        net = slim.avg_pool2d(net, shape[1:3], padding="VALID", scope="pool")
+                        net = slim.dropout(
+                            net,
+                            keep_prob=config.dropout_prob,
+                            is_training=config.train_inception,
+                            scope="dropout")
+                        net = slim.flatten(net, scope="flatten")
 
-        def conv2d(x, W):
-          return tf.nn.conv2d(x, W, strides=[1,1,1,1], padding='SAME')
+        # Add summaries.
+        if config.add_summaries:
+            for v in end_points.values():
+                tf.contrib.layers.summaries.summarize_activation(v)
 
-        def max_pool_4x4(x):
-          return tf.nn.max_pool(x, ksize=[1, 4, 4, 1],
-                                strides=[1, 4, 4, 1], padding='SAME')
+        self.net = net
 
-        # self.x = tf.placeholder(tf.float32, shape=[None, args.image_width * args.image_height * args.image_channels], name="cnn_feed")
-        self.x = np.zeros((args.batch_size, args.image_width * args.image_height * 1), dtype=np.float32)
-        with tf.variable_scope('input_cnn'):
-            W_conv1 = weight_variable([32, 32, 1, 32], 'input_cnn/weights')
-            b_conv1 = bias_variable([32], 'input_cnn/biases')
+def get_default_inception_configs():
+    return {"train_inception": true, "dropout_prob": 0.8, "weight_decay": 0.00004, "stddev": 0.1, "add_summaries": True}
 
-            x_image = tf.reshape(self.x, [-1, args.image_width, args.image_height, 1])
+def setup_inception_initializer(mode, variables, ckpt_file):
+    """Sets up the function to restore inception variables from checkpoint."""
+    if mode != "inference":
+        # Restore inception variables only.
+        saver = tf.train.Saver(variables)
 
-            h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
-            h_pool1 = max_pool_4x4(h_conv1)
+    def restore_fn(sess):
+        tf.logging.info("Restoring Inception variables from checkpoint file %s",
+            ckpt_file)
+        saver.restore(sess, ckpt_file)
 
-            # Add summaries
-            # tf.scalar_summary("weights", W_conv1)
-            # tf.scalar_summary("biases", b_conv1)
-            # for var in tf.trainable_variables():
-            #     tf.histogram_summary(var.op.name, var)
-
-        with tf.variable_scope('hidden_cnn1'):
-            W_conv2 = weight_variable([5, 5, 32, 64], 'hidden_cnn1/weights')
-            b_conv2 = bias_variable([64], 'hidden_cnn1/biases')
-
-            h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-            h_pool2 = max_pool_4x4(h_conv2)
-
-            # Add summaries
-            # tf.scalar_summary("weights", W_conv2)
-            # tf.scalar_summary("biases", b_conv2)
-            # for var in tf.trainable_variables():
-            #     tf.histogram_summary(var.op.name, var)
-
-        with tf.variable_scope('hidden_cnn2'):
-            W_conv3 = weight_variable([1, 2, 64, 64], 'hidden_cnn2/weights')
-            b_conv3 = bias_variable([64], 'hidden_cnn2/biases')
-
-            h_conv3 = tf.nn.relu(conv2d(h_pool2, W_conv3) + b_conv3)
-            h_pool3 = max_pool_4x4(h_conv3)
-
-            self.keep_prob = .5
-            h_conv3_drop = tf.reshape(tf.nn.dropout(h_pool3, self.keep_prob), [args.batch_size, 128])
-
-            W_conv3 = tf.reshape(W_conv3, [128, 64])
-
-            self.outputs = tf.matmul(h_conv3_drop, W_conv3) + b_conv3
-
-            # Add summaries
-            # tf.scalar_summary("weights", W_conv3)
-            # tf.scalar_summary("biases", b_conv3)
-            # for var in tf.trainable_variables():
-            #     tf.histogram_summary(var.op.name, var)
+    return restore_fn

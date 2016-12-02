@@ -24,7 +24,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-from cnn import CNN
+from cnn
 from ops import input_ops, image_processing
 
 class Model(object):
@@ -125,16 +125,20 @@ class Model(object):
         self.target_seqs = target_seqs
         self.input_mask = input_mask
 
-    def build_image_embeddings(self):
-        cnn = CNN(self.config)
-        cnn.x = self.images
-        cnn_outputs = cnn.outputs
 
-        tf.logging.info("cnn_outputs %s" % cnn_outputs)
+    def init_cnn(self):
+        self.init_fn = cnn.init_cnn(self.mode, self.inception_variables, self.config.inception_checkpoint_file)
+        self.inception_config = cnn.get_default_inception_configs()
+
+    def build_image_embeddings(self):
+        cnn_output = cnn.InceptionV3(self.inception_config, self.images)
+
+        self.inception_variables = tf.get_collection(
+            tf.GraphKeys.VARIABLES, scope="InceptionV3")
 
         with tf.variable_scope("image_embedding") as scope:
             image_embeddings = tf.contrib.layers.fully_connected(
-                inputs=cnn_outputs,
+                inputs=cnn_output,
                 num_outputs=self.config.embedding_size,
                 activation_fn=None,
                 weights_initializer=self.initializer,
@@ -164,17 +168,17 @@ class Model(object):
                 input_keep_prob=self.config.lstm_droput_keep_prob,
                 output_keep_prob=self.config.lstm_droput_keep_prob)
 
-        def _decoder_fn(decoder_inputs, initial_state, cell, num_symbols, embedding_size, scope, initial_state_attention=False):
-            top_states = [tf.reshape(e, [-1, 1, cell.output_size]) for e in tf.unpack(self.image_embeddings)]
-            attention_states = tf.concat(1, top_states)
-            return tf.nn.seq2seq.embedding_attention_decoder(decoder_inputs=decoder_inputs,
-                                                             initial_state=initial_state,
-                                                             attention_states=attention_states,
-                                                             cell=cell,
-                                                             num_symbols=num_symbols,
-                                                             embedding_size=embedding_size,
-                                                             scope=scope,
-                                                             initial_state_attention=initial_state_attention)
+        # def _decoder_fn(decoder_inputs, initial_state, cell, num_symbols, embedding_size, scope, initial_state_attention=False):
+        #     top_states = [tf.reshape(e, [-1, 1, cell.output_size]) for e in tf.unpack(self.image_embeddings)]
+        #     attention_states = tf.concat(1, top_states)
+        #     return tf.nn.seq2seq.embedding_attention_decoder(decoder_inputs=decoder_inputs,
+        #                                                      initial_state=initial_state,
+        #                                                      attention_states=attention_states,
+        #                                                      cell=cell,
+        #                                                      num_symbols=num_symbols,
+        #                                                      embedding_size=embedding_size,
+        #                                                      scope=scope,
+        #                                                      initial_state_attention=initial_state_attention)
 
         with tf.variable_scope("attend", initializer=self.initializer) as attend_scope:
             zero_state = cell.zero_state(batch_size=self.image_embeddings.get_shape()[0], dtype=tf.float32)
@@ -255,9 +259,8 @@ class Model(object):
     def build(self):
         """Creates all ops for training and evaluation."""
         self.build_inputs()
+        self.init_cnn()
         self.build_image_embeddings()
         self.build_seq_embeddings()
         self.build_model()
         self.setup_global_step()
-        with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())

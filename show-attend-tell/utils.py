@@ -7,6 +7,8 @@ class ArgumentParser(object):
             help='directory containing the training data')
         self.parser.add_argument('--train_dir', type=str, default='train_dir',
             help='directory to save TF checkpoints')
+        self.parser.add_argument('--inception_checkpoint_file', type=str, default=('%s' % os.path.join(os.path.expanduser('~'), 'inception/inception_v3.ckpt')),
+            help='The path to the InceptionV3 checkpoint file (download from here http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz)')
         self.parser.add_argument('--eval_dir', type=str, default='eval_dir',
             help='directory to save Eval summaries')
         self.parser.add_argument('--batch_size', type=int, default=50,
