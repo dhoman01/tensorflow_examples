@@ -24,7 +24,7 @@ class ArgumentParser(object):
             help='The number of LSTM layers')
         self.parser.add_argument('--lstm_droput_keep_prob', type=float, default=0.7,
             help='The dropout keep probability applied to LSTM variables')
-        self.parser.add_argument('--vocab_size', type=int, default=20,
+        self.parser.add_argument('--vocab_size', type=int, default=30,
             help='Number of unique "words" in the vocab (+1 for <UNK>). Must be greater than or equal to actual vocab size.')
         self.parser.add_argument('--num_preprocess_threads', type=int, default=4,
             help='Number of threads used for preprocessing. Should be multiple of 2')
@@ -46,7 +46,7 @@ class ArgumentParser(object):
             help='The maximum number of checkpoints to save')
         self.parser.add_argument('--optimizer', type=str, default="Adam",
             help='The optimizer used for training the model')
-        self.parser.add_argument('--log_every_n_steps', type=int, default=100,
+        self.parser.add_argument('--log_every_n_steps', type=int, default=1,
             help='Frequency to print out log messages')
         self.parser.add_argument('--input_file_pattern', type=str, default="data_dir/train/*",
             help='The file pattern of the input images')

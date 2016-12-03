@@ -71,6 +71,11 @@ if not os.path.isdir(os.path.join(args.data_dir, args.train_dir)):
 if not os.path.isdir(os.path.join(args.data_dir, args.test_dir)):
     os.mkdir(os.path.join(args.data_dir, args.test_dir))
 
+symbols = [np.asarray(Image.open("plus.png")), np.asarray(Image.open("minus.png")),
+    np.asarray(Image.open("divide.png")), np.asarray(Image.open("times.png")),
+    np.asarray(Image.open("equal.png")), np.asarray(Image.open("mod.png")),
+    np.asarray(Image.open("decimal.png"))]
+sym_labels = ["+", "-", "/", "x", "=", "%", "."]
 
 labels = ["0","1","2","3","4","5","6","7","8","9"]
 def onehot2label(caption):
@@ -83,8 +88,11 @@ train_labels = []
 for i in range(args.num_of_train):
     images, captions = mnist.train.next_batch(3)
 
-    image = np.concatenate((images[0].reshape(28,28), images[1].reshape(28,28), images[2].reshape(28,28)), axis=1)
-    label = onehot2label(captions[0]) + " " + onehot2label(captions[1]) + " " + onehot2label(captions[2])
+    randone = random.randint(0,6)
+    randtwo = random.randint(0,6)
+
+    image = np.concatenate((images[0].reshape(28,28), symbols[randone].reshape(28,28), images[1].reshape(28,28), symbols[randtwo].reshape(28,28), images[2].reshape(28,28)), axis=1)
+    label = onehot2label(captions[0]) + " " + sym_labels[randone] + " " + onehot2label(captions[1]) + " " + sym_labels[randtwo] + " " + onehot2label(captions[2])
     image = Image.fromarray(np.uint8(image*255))
     filename = os.path.join(args.data_dir, args.train_dir, "%s.png" % uuid.uuid4())
     image.save(filename, 'PNG')
@@ -98,8 +106,11 @@ test_images = []
 test_labels = []
 
 for i in range(args.num_of_test):
-    image = np.concatenate((images[i].reshape(28,28), images[i + 1].reshape(28,28), images[i + 2].reshape(28,28)), axis=1)
-    label = onehot2label(captions[i]) + " " + onehot2label(captions[i + 1]) + " " + onehot2label(captions[i + 2])
+    randone = random.randint(0,6)
+    randtwo = random.randint(0,6)
+
+    image = np.concatenate((images[0].reshape(28,28), symbols[randone].reshape(28,28), images[1].reshape(28,28), symbols[randtwo].reshape(28,28), images[2].reshape(28,28)), axis=1)
+    label = onehot2label(captions[0]) + " " + sym_labels[randone] + " " + onehot2label(captions[1]) + " " + sym_labels[randtwo] + " " + onehot2label(captions[2])
     image = Image.fromarray(np.uint8(image * 255))
     filename = os.path.join(args.data_dir, args.test_dir, "%s.png" % uuid.uuid4())
     image.save(filename, 'PNG')

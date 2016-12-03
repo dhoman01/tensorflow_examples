@@ -73,7 +73,4 @@ def process_image(encoded_image,
     image = tf.sub(image, 0.5)
     image = tf.mul(image, 2.0)
 
-    image = tf.squeeze(image)
-
-    image = tf.reshape(image, [-1])
     return image

@@ -27,9 +27,6 @@ class InceptionV3(object):
     def __init__(self, config, images, scope="InceptionV3"):
         tf.logging.info("InceptionV3 config: %s" % config)
 
-        images = tf.reshape(images, [-1, config['image_height'], config['image_width'], config['image_channels']])
-
-        tf.logging.info("Image reshaped to %s" % images.get_shape())
         if config['train_inception']:
             weights_regularizer = tf.contrib.layers.l2_regularizer(config['weight_decay'])
         else:

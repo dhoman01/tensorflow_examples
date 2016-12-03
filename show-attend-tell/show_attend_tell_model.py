@@ -138,8 +138,6 @@ class Model(object):
         self.inception_variables = tf.get_collection(
             tf.GraphKeys.VARIABLES, scope="InceptionV3")
 
-        tf.logging.info("inception_variables %s" % self.inception_variables)
-
         with tf.variable_scope("image_embedding") as scope:
             image_embeddings = tf.contrib.layers.fully_connected(
                 inputs=cnn_output,
@@ -166,28 +164,31 @@ class Model(object):
         if self.config.num_layers > 1:
             cell = tf.nn.rnn_cell.MultiRNNCell([cell] * self.config.num_layers)
 
+        cell = tf.contrib.rnn.AttentionCellWrapper(cell, self.config.embedding_size, state_is_tuple=True)
+
         if self.is_training():
             cell = tf.nn.rnn_cell.DropoutWrapper(
                 cell,
                 input_keep_prob=self.config.lstm_droput_keep_prob,
                 output_keep_prob=self.config.lstm_droput_keep_prob)
 
-        def _decoder_fn(decoder_inputs, initial_state, cell, output_size, scope, initial_state_attention=True):
-            top_states = [tf.reshape(e, [-1, 1, cell.output_size]) for e in tf.unpack(self.image_embeddings)]
-            attention_states = tf.concat(1, top_states)
-            return tf.nn.seq2seq.attention_decoder(decoder_inputs=decoder_inputs,
-                                                             initial_state=initial_state,
-                                                             attention_states=attention_states,
-                                                             cell=cell,
-                                                             output_size=output_size,
-                                                             initial_state_attention=initial_state_attention)
+        # def _decoder_fn(decoder_inputs, initial_state, cell, output_size, scope, initial_state_attention=True):
+        #     top_states = [tf.reshape(e, [-1, 1, cell.output_size]) for e in tf.unpack(self.image_embeddings)]
+        #     attention_states = tf.concat(1, top_states)
+        #     tf.logging.info("attention_states: %s" % attention_states.get_shape())
+        #     return tf.nn.seq2seq.attention_decoder(decoder_inputs=decoder_inputs,
+        #                                                      initial_state=initial_state,
+        #                                                      attention_states=attention_states,
+        #                                                      cell=cell,
+        #                                                      output_size=output_size,
+        #                                                      initial_state_attention=initial_state_attention)
 
         with tf.variable_scope("attend", initializer=self.initializer) as attend_scope:
             zero_state = cell.zero_state(batch_size=self.image_embeddings.get_shape()[0], dtype=tf.float32)
             _, initial_state = cell(self.image_embeddings, zero_state)
 
             # allow attend variables to be reused.
-            # attend_scope.reuse_variables()
+            attend_scope.reuse_variables()
 
             if self.mode == "inference":
                 tf.concat(1, initial_state, name="initial_state")
@@ -202,20 +203,20 @@ class Model(object):
                 tf.concat(1, state_tuple, name="state")
             else:
                 sequence_length = tf.reduce_sum(self.input_mask, 1)
-                # outputs, _ = tf.nn.dynamic_rnn(cell=cell,
-                #                                inputs=self.seq_embeddings,
-                #                                sequence_length=sequence_length,
-                #                                initial_state=initial_state,
-                #                                dtype=tf.float32,
-                #                                scope=attend_scope)
-                outputs, state = _decoder_fn(
-                    decoder_inputs=tf.unpack(self.seq_embeddings),
-                    initial_state=initial_state,
-                    cell=cell,
-                    output_size=cell.output_size,
-                    scope=attend_scope)
+                outputs, _ = tf.nn.dynamic_rnn(cell=cell,
+                                               inputs=self.seq_embeddings,
+                                               sequence_length=sequence_length,
+                                               initial_state=initial_state,
+                                               dtype=tf.float32,
+                                               scope=attend_scope)
+                # outputs, _ = _decoder_fn(
+                #     decoder_inputs=tf.unpack(self.seq_embeddings),
+                #     initial_state=initial_state,
+                #     cell=cell,
+                #     output_size=cell.output_size,
+                #     scope=attend_scope)
 
-        # Stace batches
+        # Stage batches
         outputs = tf.reshape(outputs, [-1, cell.output_size])
 
         with tf.variable_scope("logits") as logits_scope:
